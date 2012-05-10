@@ -1,0 +1,5 @@
+*.swp
+*~
+
+#cached sass files
+*.scssc
