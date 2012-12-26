@@ -1,4 +1,4 @@
-Backbone-AMD-Boilerplate
+AMD-JS-Boilerplate
 ========================
 
-My own personal Backbone boilerplate
+My own requirejsjqueryunderscorebackbonemarionettehandlebarssass boilerplate
