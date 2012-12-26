@@ -1,5 +1,5 @@
 /**
- * @license handlebars hbs 0.2.1 - Alex Sexton, but Handlebars has it's own licensing junk
+ * @license handlebars hbs 0.4.0 - Alex Sexton, but Handlebars has it's own licensing junk
  *
  * Available via the MIT or new BSD license.
  * see: http://github.com/jrburke/require-cs for details on the plugin this was based off of
@@ -8,10 +8,10 @@
 /* Yes, deliciously evil. */
 /*jslint evil: true, strict: false, plusplus: false, regexp: false */
 /*global require: false, XMLHttpRequest: false, ActiveXObject: false,
-define: false, process: false, window: false */  
+define: false, process: false, window: false */
 define([
 //>>excludeStart('excludeHbs', pragmas.excludeHbs)
-'Handlebars', 'underscore', 'Handlebars/i18nprecompile', 'json2'
+'handlebars', 'underscore', 'i18nprecompile', 'json2'
 //>>excludeEnd('excludeHbs')
 ], function (
 //>>excludeStart('excludeHbs', pragmas.excludeHbs)
@@ -28,8 +28,10 @@ define([
         filecode = "w+",
         templateExtension = "hbs",
         customNameExtension = "@hbs",
-        devStyleDirectory = "/demo/styles/",
+        devStyleDirectory = "/styles/",
         buildStyleDirectory = "/demo-build/styles/",
+        helperDirectory = "template/helpers/",
+        i18nDirectory = "template/i18n/",
         buildCSSFileName = "screen.build.css";
 
     if (typeof window !== "undefined" && window.navigator && window.document && !window.navigator.userAgent.match(/Node.js/)) {
@@ -78,8 +80,11 @@ define([
                !!process.versions.node) {
         //Using special require.nodeRequire, something added by r.js.
         fs = require.nodeRequire('fs');
-        fetchText = function (path, callback) {
-            callback(fs.readFileSync(path, 'utf8'));
+        fetchText = function ( path, callback ) {
+            var body = fs.readFileSync(path, 'utf8') || "";
+            // we need to remove BOM stuff from the file content
+            body = body.replace(/^\uFEFF/, '');
+            callback(body);
         };
     } else if (typeof java !== "undefined" && typeof java.io !== "undefined") {
         fetchText = function(path, callback) {
@@ -125,7 +130,7 @@ define([
             }
         },
 
-        version: '1.0.3beta',
+        version: '0.4.0',
 
         load: function (name, parentRequire, load, config) {
           //>>excludeStart('excludeHbs', pragmas.excludeHbs)
@@ -163,7 +168,7 @@ define([
               var statement, res, test;
               if ( nodes && nodes.statements ) {
                 statement = nodes.statements[0];
-                if ( statement.type === "comment" ) {
+                if ( statement && statement.type === "comment" ) {
                   try {
                     res = ( statement.comment ).replace(new RegExp('^[\\s]+|[\\s]+$', 'g'), '');
                     test = JSON.parse(res);
@@ -217,9 +222,15 @@ define([
                     res.push(prefix + statement.id.string);
                   }
 
+                  var paramsWithoutParts = ['this', '.', '..', './..', '../..', '../../..'];
+
                   // grab the params
                   if ( statement.params ) {
-                    _(statement.params).forEach(function(param){
+                    _(statement.params).forEach(function(param) {
+                      if ( _(paramsWithoutParts).contains(param.original) ) {
+                        helpersres.push(statement.id.string);
+                      }
+
                       parts = composeParts( param.parts );
 
                       for(var part in parts ) {
@@ -241,6 +252,9 @@ define([
                 // if it's a whole new program
                 if ( statement && statement.program && statement.program.statements ) {
                   sideways = recursiveVarSearch([statement.mustache],[], "", helpersres)[0] || "";
+                  if ( statement.program.inverse && statement.program.inverse.statements ) {
+                    recursiveVarSearch( statement.program.inverse.statements, res, prefix + newprefix + (sideways ? (prefix+newprefix) ? "."+sideways : sideways : ""), helpersres);
+                  }
                   recursiveVarSearch( statement.program.statements, res, prefix + newprefix + (sideways ? (prefix+newprefix) ? "."+sideways : sideways : ""), helpersres);
                 }
               });
@@ -248,16 +262,16 @@ define([
             }
 
             // This finds the Helper dependencies since it's soooo similar
-            function getExternalDeps( nodes ) { 
+            function getExternalDeps( nodes ) {
               var res   = [];
               var helpersres = [];
-              
+
               if ( nodes && nodes.statements ) {
                 res = recursiveVarSearch( nodes.statements, [], undefined, helpersres );
               }
 
               var defaultHelpers = ["helperMissing", "blockHelperMissing", "each", "if", "unless", "with"];
-              
+
               return {
                 vars : _(res).chain().unique().map(function(e){
                   if ( e === "" ) {
@@ -287,11 +301,12 @@ define([
                       vars = extDeps.vars,
                       helps = extDeps.helpers || [],
                       depStr = deps.join("', 'hbs!").replace(/_/g, '/'),
-                      helpDepStr = (function (){
+                      helpDepStr = config.hbs && config.hbs.disableHelpers ?
+                      "" : (function (){
                         var i, paths = [],
                             pathGetter = config.hbs && config.hbs.helperPathCallback
                               ? config.hbs.helperPathCallback
-                              : function (name){return 'template/helpers/' + name;};
+                              : function (name){return (config.hbs && config.hbs.helperDirectory ? config.hbs.helperDirectory : helperDirectory) + name;};
 
                         for ( i = 0; i < helps.length; i++ ) {
                           paths[i] = "'" + pathGetter(helps[i]) + "'"
@@ -303,7 +318,6 @@ define([
                       debugProperties = "",
                       metaObj, head, linkElem;
 
-                  
                   if ( depStr ) {
                     depStr = ",'hbs!" + depStr + "'";
                   }
@@ -311,7 +325,6 @@ define([
                     helpDepStr = "," + helpDepStr;
                   }
 
-                  
                   if ( meta !== "{}" ) {
                     try {
                       metaObj = JSON.parse(meta);
@@ -324,7 +337,7 @@ define([
                           _(metaObj.styles).forEach(function (style) {
                             if ( !styleMap[style] ) {
                               linkElem = document.createElement('link');
-                              linkElem.href = config.baseUrl + 'styles/' + style + '.css';
+                              linkElem.href = config.baseUrl + devStyleDirectory + style + '.css';
                               linkElem.media = 'all';
                               linkElem.rel = 'stylesheet';
                               linkElem.type = 'text/css';
@@ -339,7 +352,7 @@ define([
                                 str = _(metaObj.styles).map(function (style) {
                                   if (!styleMap[style]) {
                                     styleMap[style] = true;
-                                    return "@import url("+buildStyleDirectory+style+".css);\n";
+                                    return "@import url("+style+".css);\n";
                                   }
                                   return "";
                                 }).join("\n");
@@ -357,9 +370,9 @@ define([
                     }
                     catch(e){
                       console.log('error injecting styles');
-                    } 
+                    }
                   }
-                  
+
                   if ( ! config.isBuild && ! config.serverRender ) {
                     debugOutputStart = "<!-- START - " + name + " -->";
                     debugOutputEnd = "<!-- END - " + name + " -->";
@@ -370,10 +383,12 @@ define([
                   }
 
                   var mapping = disableI18n? false : _.extend( langMap, config.localeMapping ),
-                      prec = precompile( text, mapping );
-                  
+                      configHbs = config.hbs || {},
+                      options = _.extend(configHbs.compileOptions || {}, { originalKeyFallback: configHbs.originalKeyFallback }),
+                      prec = precompile( text, mapping, options);
+
                   text = "/* START_TEMPLATE */\n" +
-                         "define(['hbs','Handlebars'"+depStr+helpDepStr+"], function( hbs, Handlebars ){ \n" +
+                         "define(['hbs','handlebars'"+depStr+helpDepStr+"], function( hbs, Handlebars ){ \n" +
                            "var t = Handlebars.template(" + prec + ");\n" +
                            "Handlebars.registerPartial('" + name.replace( /\//g , '_') + "', t);\n" +
                            debugProperties +
@@ -402,35 +417,45 @@ define([
 
                   if ( !config.isBuild ) {
                     require( deps, function (){
-                      load.fromText(compiledName, text);
+                      load.fromText(text);
 
                       //Give result to load. Need to wait until the module
                       //is fully parse, which will happen after this
                       //execution.
-                      parentRequire([compiledName], function (value) {
+                      parentRequire([name], function (value) {
                         load(value);
                       });
                     });
                   }
                   else {
-                    load.fromText(compiledName, text);
+                    load.fromText(name, text);
 
                     //Give result to load. Need to wait until the module
                     //is fully parse, which will happen after this
                     //execution.
-                    parentRequire([compiledName], function (value) {
+                    parentRequire([name], function (value) {
                       load(value);
                     });
+                  }
+
+                  if ( config.removeCombined ) {
+                    fs.unlinkSync(path);
                   }
               });
             }
 
-            var path = parentRequire.toUrl(name +'.'+ (config.hbs && config.hbs.templateExtension? config.hbs.templateExtension : templateExtension));
+            var path,
+                omitExtension = config.hbs && config.hbs.templateExtension === false;
+            if(omitExtension) {
+              path = parentRequire.toUrl(name);
+            } else {
+              path = parentRequire.toUrl(name +'.'+ (config.hbs && config.hbs.templateExtension ? config.hbs.templateExtension : templateExtension));
+            }
 
             if (disableI18n){
                 fetchAndRegister(false);
             } else {
-                fetchOrGetCached( parentRequire.toUrl('template/i18n/'+(config.locale || "en_us")+'.json'), function (langMap) {
+                fetchOrGetCached(parentRequire.toUrl((config.hbs && config.hbs.i18nDirectory ? config.hbs.i18nDirectory : i18nDirectory) + (config.locale || "en_us") + '.json'), function (langMap) {
                   fetchAndRegister(JSON.parse(langMap));
                 });
             }
