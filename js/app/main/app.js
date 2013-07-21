@@ -1,8 +1,6 @@
 define(function(require){
-  var Marionette = require('marionette'),
-      Shim = require('marionetteShim'),
-
-      AppView = require('./views/View.AppView'),
+  var Marionette = require('marionette');
+      AppView = require('../views/View.AppView'),
       App = new Marionette.Application();
 
   App.addRegions({
@@ -15,7 +13,6 @@ define(function(require){
   App.addInitializer(function (options){
       App.Router = Marionette.AppRouter.extend({});
       App.main.show(new AppView());
-
       Backbone.history.start();
   });
 

@@ -1,12 +1,11 @@
-	
 require.config({
-    basePath: 'js',
+    baseUrl: 'js',
     paths : {
 
         jquery: 'libs/jquery/require-jquery.1.8.3',		
         underscore: 'libs/underscore/underscore-min.1.4.3',
-        backbone: 'libs/backbone/backbone-amd-min.0.9.9',
-        marionette: 'libs/backbone/backbone-amd.1.0.4.js',
+        backbone: 'libs/backbone/backbone-amd.1.0.0',
+        marionette: 'libs/backbone/backbone.marionette.amd.1.0.4',
         'backbone.wreqr': 'libs/backbone/backbone.wreqr.min',
         'backbone.eventbinder': 'libs/backbone/backbone.eventbinder.min',
         'backbone.babysitter': 'libs/backbone/backbone.babysitter.min',
@@ -43,7 +42,8 @@ require.config({
             exports: 'Handlebars'
         },
         marionette: {
-            deps: ['underscore', 'jquery', 'backbone']
+            deps: ['jquery', 'underscore', 'backbone'],
+            exports: 'Marionette'
         },
         validation: {
             deps: ['backbone']
@@ -58,5 +58,7 @@ require.config({
 
     urlArgs: "bust=" +  (new Date()).getTime()	//cache-busting for development
 });
-	
 
+	
+require(['app/main/app'], function (common) {
+});
